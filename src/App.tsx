@@ -184,7 +184,7 @@ export default function App() {
 
   const handleDownload = () => {
     const id = mode === 'QR' ? 'qr-canvas' : 'barcode-canvas';
-    const name = `quickqr-${mode.toLowerCase()}-${Date.now()}.png`;
+    const name = `blinkqr-${mode.toLowerCase()}-${Date.now()}.png`;
     downloadAsPng(id, name);
   };
 
@@ -200,7 +200,7 @@ export default function App() {
           await navigator.share({
             files: [file],
             title: 'QuickQR Generation',
-            text: 'Generated with QuickQR'
+            text: 'Generated with Blink QR'
           });
         } catch (err) {
           console.error('Share failed:', err);
@@ -222,7 +222,7 @@ export default function App() {
               animate={{ y: 0, opacity: 1 }}
               className="text-6xl md:text-8xl font-black uppercase tracking-tighter leading-none"
             >
-              Quick<span className="text-neo-primary">QR</span>
+              Blink<span className="text-neo-primary">QR</span>
             </motion.h1>
             <p className="text-lg font-bold opacity-80 italic">Instantly generate codes entirely on-device.</p>
           </div>
