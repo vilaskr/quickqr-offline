@@ -23,13 +23,84 @@ import { cn, downloadAsPng, copyToClipboard } from './lib/utils';
 type Mode = 'QR' | 'BARCODE';
 type QRType = 'TEXT' | 'URL' | 'WIFI' | 'EMAIL' | 'PHONE';
 
+const calculateEANChecksum = (digits: string): number => {
+  const data = digits.slice(0, 12);
+  const sum = data
+    .split('')
+    .reduce((acc, digit, idx) => {
+      const weight = idx % 2 === 0 ? 1 : 3;
+      return acc + parseInt(digit) * weight;
+    }, 0);
+  const checksum = (10 - (sum % 10)) % 10;
+  return checksum;
+};
+
+const calculateUPCChecksum = (digits: string): number => {
+  const data = digits.slice(0, 11);
+  const sum = data
+    .split('')
+    .reduce((acc, digit, idx) => {
+      const weight = idx % 2 === 0 ? 3 : 1;
+      return acc + parseInt(digit) * weight;
+    }, 0);
+  const checksum = (10 - (sum % 10)) % 10;
+  return checksum;
+};
+
+interface BarcodeRendererProps {
+  value: string;
+  format: 'CODE128' | 'EAN13' | 'UPC';
+  onError?: (error: string) => void;
+}
+
+const BarcodeRenderer = ({ value, format, onError }: BarcodeRendererProps) => {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  useEffect(() => {
+    if (canvasRef.current && value) {
+      try {
+        JsBarcode(canvasRef.current, value, {
+          format: format,
+          width: 2,
+          height: 100,
+          displayValue: true,
+          font: 'Space Grotesk',
+          textAlign: 'center',
+          textPosition: 'bottom',
+          textMargin: 10,
+          fontSize: 16,
+          background: '#ffffff',
+          lineColor: '#000000',
+          margin: 10,
+          valid: (valid) => {
+            if (!valid && onError) {
+              onError(`Invalid ${format} check digit or format`);
+            }
+          }
+        });
+      } catch (err) {
+        console.error('Barcode generation error:', err);
+        if (onError) onError(String(err));
+      }
+    }
+  }, [value, format, onError]);
+
+  return (
+    <canvas 
+      id="barcode-canvas" 
+      ref={canvasRef}
+      className="max-w-full h-auto"
+    />
+  );
+};
+
 export default function App() {
   const [mode, setMode] = useState<Mode>('QR');
   const [qrType, setQrType] = useState<QRType>('TEXT');
   const [input, setInput] = useState('');
   const [copied, setCopied] = useState(false);
   const [barcodeFormat, setBarcodeFormat] = useState<'CODE128' | 'EAN13' | 'UPC'>('CODE128');
-  const barcodeCanvasRef = useRef<HTMLCanvasElement>(null);
+  const [barcodeError, setBarcodeError] = useState<string | null>(null);
   
   // WiFi-specific state
   const [ssid, setSsid] = useState('');
@@ -40,6 +111,11 @@ export default function App() {
   const [emailAddress, setEmailAddress] = useState('');
   const [emailSubject, setEmailSubject] = useState('');
   const [emailMessage, setEmailMessage] = useState('');
+
+  // Reset errors when input changes
+  useEffect(() => {
+    setBarcodeError(null);
+  }, [input, barcodeFormat]);
 
   // Update input based on specific fields for complex types
   useEffect(() => {
@@ -64,29 +140,22 @@ export default function App() {
     }
   }, [qrType, ssid, password, encryption, emailAddress, emailSubject, emailMessage]);
 
-  // Handle Barcode rendering to canvas
-  useEffect(() => {
-    if (mode === 'BARCODE' && input && barcodeCanvasRef.current) {
-      try {
-        JsBarcode(barcodeCanvasRef.current, input, {
-          format: barcodeFormat,
-          width: 2,
-          height: 100,
-          displayValue: true,
-          font: 'Space Grotesk',
-          textAlign: 'center',
-          textPosition: 'bottom',
-          textMargin: 10,
-          fontSize: 16,
-          background: '#ffffff',
-          lineColor: '#000000',
-          margin: 10
-        });
-      } catch (err) {
-        console.error('Barcode generation error:', err);
-      }
+  const isBarcodeValid = () => {
+    if (mode !== 'BARCODE' || !input) return true;
+    if (barcodeFormat === 'EAN13') return /^\d{13}$/.test(input);
+    if (barcodeFormat === 'UPC') return /^\d{12}$/.test(input);
+    return true;
+  };
+
+  const handleFixChecksum = () => {
+    if (barcodeFormat === 'EAN13' && input.length === 13) {
+      const checksum = calculateEANChecksum(input);
+      setInput(input.slice(0, 12) + checksum);
+    } else if (barcodeFormat === 'UPC' && input.length === 12) {
+      const checksum = calculateUPCChecksum(input);
+      setInput(input.slice(0, 11) + checksum);
     }
-  }, [mode, input, barcodeFormat]);
+  };
 
   const handleClear = () => {
     setInput('');
@@ -385,6 +454,21 @@ export default function App() {
                       {barcodeFormat === 'CODE128' && "Supports alphanumeric characters."}
                     </p>
                   </div>
+                  {barcodeError && (
+                    <div className="mt-2 p-3 bg-red-50 neo-border-sm border-red-200 flex items-center justify-between">
+                      <p className="text-[10px] font-bold text-red-800 leading-tight">
+                        {barcodeError}
+                      </p>
+                      {(barcodeFormat === 'EAN13' || barcodeFormat === 'UPC') && (
+                        <button 
+                          onClick={handleFixChecksum}
+                          className="text-[10px] font-black uppercase bg-neo-primary text-white px-2 py-1 neo-border-sm hover:-translate-y-0.5 active:translate-y-0.5 transition-all"
+                        >
+                          Fix Checksum
+                        </button>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
             )}
@@ -404,7 +488,7 @@ export default function App() {
              
              <div className="w-full h-fit flex flex-col items-center justify-center">
                <AnimatePresence mode="wait">
-                 {input ? (
+                 {input && isBarcodeValid() && !barcodeError ? (
                    <motion.div 
                      key={input + mode + barcodeFormat}
                      initial={{ scale: 0.9, opacity: 0 }}
@@ -421,12 +505,26 @@ export default function App() {
                          includeMargin={true}
                        />
                      ) : (
-                       <canvas 
-                         id="barcode-canvas" 
-                         ref={barcodeCanvasRef}
-                         className="max-w-full h-auto"
+                       <BarcodeRenderer 
+                         value={input}
+                         format={barcodeFormat}
+                         onError={(err) => setBarcodeError(err)}
                        />
                      )}
+                   </motion.div>
+                 ) : input && (!isBarcodeValid() || barcodeError) ? (
+                   <motion.div 
+                     initial={{ opacity: 0 }}
+                     animate={{ opacity: 1 }}
+                     className="text-center text-neo-primary px-4"
+                   >
+                     <AlertCircle size={60} className="mx-auto mb-4" />
+                     <p className="font-black uppercase text-lg leading-tight">
+                       Invalid Data<br/>
+                       <span className="text-[10px] opacity-70">
+                         {barcodeError || (barcodeFormat === 'EAN13' ? '13 numeric digits required' : '12 numeric digits required')}
+                       </span>
+                     </p>
                    </motion.div>
                  ) : (
                    <div className="text-center opacity-20 py-10">
@@ -441,11 +539,11 @@ export default function App() {
 
             <div className="flex flex-col w-full gap-3 mt-auto">
               <button 
-                disabled={!input}
+                disabled={!input || !isBarcodeValid() || !!barcodeError}
                 onClick={handleDownload}
                 className={cn(
                   "neo-button w-full flex items-center justify-center gap-2",
-                  !input ? "bg-gray-100 cursor-not-allowed opacity-50 grayscale" : "bg-neo-primary text-white"
+                  (!input || !isBarcodeValid() || !!barcodeError) ? "bg-gray-100 cursor-not-allowed opacity-50 grayscale" : "bg-neo-primary text-white"
                 )}
               >
                 <Download size={20} />
@@ -454,22 +552,22 @@ export default function App() {
               
               <div className="grid grid-cols-2 gap-3">
                 <button 
-                  disabled={!input}
+                  disabled={!input || !isBarcodeValid() || !!barcodeError}
                   onClick={handleCopy}
                   className={cn(
                      "neo-button-secondary text-xs uppercase flex items-center justify-center gap-2",
-                     !input ? "opacity-50 cursor-not-allowed" : ""
+                     (!input || !isBarcodeValid() || !!barcodeError) ? "opacity-50 cursor-not-allowed" : ""
                   )}
                 >
                   {copied ? <CheckCircle2 size={16} /> : <Copy size={16} />}
                   {copied ? 'COPIED' : 'Copy Image'}
                 </button>
                 <button 
-                  disabled={!input}
+                  disabled={!input || !isBarcodeValid() || !!barcodeError}
                   onClick={handleShare}
                   className={cn(
                      "neo-button-secondary text-xs uppercase flex items-center justify-center gap-2",
-                     !input ? "opacity-30 cursor-not-allowed" : ""
+                     (!input || !isBarcodeValid() || !!barcodeError) ? "opacity-30 cursor-not-allowed" : ""
                   )}
                 >
                   <Share2 size={16} />
@@ -481,16 +579,19 @@ export default function App() {
 
         </main>
 
-        <footer className="mt-12 w-full flex justify-between items-center opacity-80">
-          <div className="flex gap-4">
-            <span className="text-[10px] font-bold uppercase tracking-widest hidden md:inline">Geometric Stack v4.2</span>
-            <span className="text-[10px] font-bold uppercase tracking-widest opacity-40 hidden md:inline">|</span>
+        <footer className="mt-12 w-full flex flex-col md:flex-row justify-between items-center gap-4 border-t-2 border-black pt-6 opacity-80">
+          <div className="flex flex-col md:flex-row gap-4 items-center">
+            <span className="text-[10px] font-black uppercase tracking-widest bg-black text-white px-2 py-0.5">© VILAS K R</span>
+            <span className="text-[10px] font-bold uppercase tracking-widest hidden md:inline opacity-40">|</span>
             <span className="text-[10px] font-bold uppercase tracking-widest">Built for instant sharing</span>
           </div>
-          <div className="flex gap-2">
-            <div className="w-3 h-3 bg-red-600 border-2 border-black rounded-full"></div>
-            <div className="w-3 h-3 bg-yellow-400 border-2 border-black rounded-full"></div>
-            <div className="w-3 h-3 bg-green-500 border-2 border-black rounded-full"></div>
+          <div className="flex items-center gap-6">
+            <span className="text-[10px] font-bold uppercase tracking-widest opacity-60">Geometric Stack v4.2</span>
+            <div className="flex gap-2">
+              <div className="w-3 h-3 bg-red-600 border-2 border-black rounded-full animate-pulse"></div>
+              <div className="w-3 h-3 bg-yellow-400 border-2 border-black rounded-full animate-pulse [animation-delay:200ms]"></div>
+              <div className="w-3 h-3 bg-green-500 border-2 border-black rounded-full animate-pulse [animation-delay:400ms]"></div>
+            </div>
           </div>
         </footer>
       </div>
