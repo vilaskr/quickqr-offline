@@ -15,13 +15,15 @@ import {
   Type, 
   CheckCircle2,
   AlertCircle,
-  Zap
+  Zap,
+  User,
+  MapPin
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn, downloadAsPng, copyToClipboard } from './lib/utils';
 
 type Mode = 'QR' | 'BARCODE';
-type QRType = 'TEXT' | 'URL' | 'WIFI' | 'EMAIL' | 'PHONE';
+type QRType = 'TEXT' | 'URL' | 'WIFI' | 'EMAIL' | 'PHONE' | 'MECARD' | 'GEO';
 
 const calculateEANChecksum = (digits: string): number => {
   const data = digits.slice(0, 12);
@@ -112,6 +114,19 @@ export default function App() {
   const [emailSubject, setEmailSubject] = useState('');
   const [emailMessage, setEmailMessage] = useState('');
 
+  // MeCard state
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
+  const [mePhone, setMePhone] = useState('');
+  const [meEmail, setMeEmail] = useState('');
+  const [meAddress, setMeAddress] = useState('');
+  const [meUrl, setMeUrl] = useState('');
+  const [meNote, setMeNote] = useState('');
+
+  // Geo state
+  const [latitude, setLatitude] = useState('');
+  const [longitude, setLongitude] = useState('');
+
   // Reset errors when input changes
   useEffect(() => {
     setBarcodeError(null);
@@ -137,8 +152,28 @@ export default function App() {
       } else if (input) {
           setInput(`tel:${input}`);
       }
+    } else if (qrType === 'MECARD') {
+      if (firstName || lastName || mePhone || meEmail) {
+        let mecard = 'MECARD:';
+        if (lastName || firstName) mecard += `N:${lastName}${lastName && firstName ? ',' : ''}${firstName};`;
+        if (mePhone) mecard += `TEL:${mePhone};`;
+        if (meEmail) mecard += `EMAIL:${meEmail};`;
+        if (meAddress) mecard += `ADR:${meAddress};`;
+        if (meUrl) mecard += `URL:${meUrl};`;
+        if (meNote) mecard += `NOTE:${meNote};`;
+        mecard += ';';
+        setInput(mecard);
+      } else {
+        setInput('');
+      }
+    } else if (qrType === 'GEO') {
+      if (latitude && longitude) {
+        setInput(`geo:${latitude},${longitude}`);
+      } else {
+        setInput('');
+      }
     }
-  }, [qrType, ssid, password, encryption, emailAddress, emailSubject, emailMessage]);
+  }, [qrType, ssid, password, encryption, emailAddress, emailSubject, emailMessage, firstName, lastName, mePhone, meEmail, meAddress, meUrl, meNote, latitude, longitude]);
 
   const isBarcodeValid = () => {
     if (mode !== 'BARCODE' || !input) return true;
@@ -164,6 +199,15 @@ export default function App() {
     setEmailAddress('');
     setEmailSubject('');
     setEmailMessage('');
+    setFirstName('');
+    setLastName('');
+    setMePhone('');
+    setMeEmail('');
+    setMeAddress('');
+    setMeUrl('');
+    setMeNote('');
+    setLatitude('');
+    setLongitude('');
   };
 
   const handleCopy = async () => {
@@ -269,7 +313,7 @@ export default function App() {
             {mode === 'QR' && (
               <div className="space-y-6">
                 <div className="flex flex-wrap gap-2">
-                  {(['TEXT', 'URL', 'WIFI', 'EMAIL', 'PHONE'] as QRType[]).map((type) => (
+                  {(['TEXT', 'URL', 'WIFI', 'EMAIL', 'PHONE', 'MECARD', 'GEO'] as QRType[]).map((type) => (
                     <button
                       key={type}
                       onClick={() => {
@@ -287,6 +331,8 @@ export default function App() {
                       {type === 'WIFI' && <Wifi size={20} />}
                       {type === 'EMAIL' && <Mail size={20} />}
                       {type === 'PHONE' && <Phone size={20} />}
+                      {type === 'MECARD' && <User size={20} />}
+                      {type === 'GEO' && <MapPin size={20} />}
                       <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 translate-y-full px-1 bg-black text-white text-[8px] font-bold opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-50">
                         {type}
                       </span>
@@ -302,7 +348,7 @@ export default function App() {
                         value={input}
                         onInput={(e) => setInput(e.currentTarget.value)}
                         placeholder="Type your message here..."
-                        className="w-full h-32 neo-input resize-none text-xl"
+                        className="w-full md:h-40 h-32 neo-input resize-none md:text-xl text-lg"
                       />
                       <div className="flex justify-between items-center px-1">
                         <span className="text-[10px] font-black uppercase opacity-60">
@@ -403,7 +449,7 @@ export default function App() {
                           value={emailMessage}
                           onInput={(e) => setEmailMessage(e.currentTarget.value)}
                           placeholder="Email content..."
-                          className="w-full h-24 neo-input resize-none"
+                          className="w-full md:h-32 h-24 neo-input resize-none"
                         />
                       </div>
                     </div>
@@ -419,6 +465,108 @@ export default function App() {
                         placeholder="+33 000 000 000"
                         className="w-full neo-input"
                       />
+                    </div>
+                  )}
+
+                  {qrType === 'MECARD' && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <label className="text-xs font-black uppercase">First Name</label>
+                        <input
+                          type="text"
+                          value={firstName}
+                          onInput={(e) => setFirstName(e.currentTarget.value)}
+                          placeholder="John"
+                          className="w-full neo-input"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-xs font-black uppercase">Last Name</label>
+                        <input
+                          type="text"
+                          value={lastName}
+                          onInput={(e) => setLastName(e.currentTarget.value)}
+                          placeholder="Doe"
+                          className="w-full neo-input"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-xs font-black uppercase">Phone</label>
+                        <input
+                          type="tel"
+                          value={mePhone}
+                          onInput={(e) => setMePhone(e.currentTarget.value)}
+                          placeholder="+1 234 567 890"
+                          className="w-full neo-input"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-xs font-black uppercase">Email</label>
+                        <input
+                          type="email"
+                          value={meEmail}
+                          onInput={(e) => setMeEmail(e.currentTarget.value)}
+                          placeholder="john@doe.com"
+                          className="w-full neo-input"
+                        />
+                      </div>
+                      <div className="space-y-2 md:col-span-2">
+                        <label className="text-xs font-black uppercase">Address</label>
+                        <input
+                          type="text"
+                          value={meAddress}
+                          onInput={(e) => setMeAddress(e.currentTarget.value)}
+                          placeholder="123 Main St, New York, NY"
+                          className="w-full neo-input"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-xs font-black uppercase">URL</label>
+                        <input
+                          type="url"
+                          value={meUrl}
+                          onInput={(e) => setMeUrl(e.currentTarget.value)}
+                          placeholder="https://johndoe.com"
+                          className="w-full neo-input"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-xs font-black uppercase">Memo</label>
+                        <input
+                          type="text"
+                          value={meNote}
+                          onInput={(e) => setMeNote(e.currentTarget.value)}
+                          placeholder="Notes..."
+                          className="w-full neo-input"
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {qrType === 'GEO' && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <label className="text-xs font-black uppercase">Latitude</label>
+                        <input
+                          type="number"
+                          step="any"
+                          value={latitude}
+                          onInput={(e) => setLatitude(e.currentTarget.value)}
+                          placeholder="40.7128"
+                          className="w-full neo-input"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-xs font-black uppercase">Longitude</label>
+                        <input
+                          type="number"
+                          step="any"
+                          value={longitude}
+                          onInput={(e) => setLongitude(e.currentTarget.value)}
+                          placeholder="-74.0060"
+                          className="w-full neo-input"
+                        />
+                      </div>
                     </div>
                   )}
                 </div>
