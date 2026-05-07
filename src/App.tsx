@@ -216,7 +216,10 @@ export default function App() {
         {/* Header Section */}
         <header className="w-full flex justify-between items-end mb-8 relative">
           <div className="flex flex-col gap-1">
-            <div className="badge w-fit mb-2">v1.0.4 - OFFLINE READY</div>
+            <div className="flex flex-wrap items-center gap-2 mb-2">
+              <div className="badge">v1.0.4 - OFFLINE READY</div>
+              <span className="text-[10px] font-black uppercase tracking-wider opacity-60 bg-white/50 px-2 py-0.5 neo-border-sm">A Product by Vilas K R</span>
+            </div>
             <motion.h1 
               initial={{ y: -20, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
